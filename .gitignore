@@ -1,4 +1,6 @@
 *.pyc
 __pycache__/
 .idea/
-video/
+images/
+stickers/
+videos/
