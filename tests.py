@@ -3,7 +3,7 @@ Topic: Detecting stickers (vignettes, stickers from LEZ zones ets.) on cars' win
 """
 # -*- coding: utf-8 -*-
 
-# import cv2
+import cv2
 from main import *
 
 
@@ -14,12 +14,15 @@ def test_stickers_detection(windshield_testing_enabled):
     :return: True/False, depending on algorithm correctness (should return True, if algorithm works)
     """
     if windshield_testing_enabled:
-        car = 'images/car1.jpg'
+        print("Test stickers detection with windshield testing enabled")
+        car = cv2.imread('images/car1.jpg', 0)
         windshield = find_windshield(car)
     else:
-        windshield = 'images/test_windshield1.jpg'
+        print("Test stickers detection with windshield testing disabled")
+        windshield = cv2.imread('images/test_windshield1.jpg', 0)
 
     stickers = find_stickers(windshield)
+
     # Validate number of detected stickers
     if len(stickers != 1):
         print("Test failed - there is only 1 sticker in this scenario, but " + str(len(stickers)) + " were detected!!!")
@@ -44,4 +47,8 @@ def test_stickers_detection(windshield_testing_enabled):
 
 
 if __name__ == '__main__':
-    test_stickers_detection(windshield_testing_enabled=False)
+    result = test_stickers_detection(windshield_testing_enabled=False)
+    if result:
+        print("TEST PASSED!!!")
+    else:
+        print("TEST FAILED!!!")

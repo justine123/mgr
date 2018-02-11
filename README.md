@@ -17,13 +17,15 @@ A single camera has the following attributes:
 - ...
 
 ## Car detection
-In while loop, cars are detected. The program is only looking for the cars with front windshield visible.
+In while loop, cars are detected, thanks to `cars.xml` classifier. 
+The program is only looking for the cars with front windshield visible.
 
 ## Windshield detection and calibration
 In the next step, front windshield of each car is detected and calibrated, in order to get rectangular shape.
 
 ## Finding stickers
-On the windshield, program detects all the stickers and compares them to the ones in the database.
+On the windshield, program detects all the stickers and compares them to the ones in the database. 
+Next, it validates the stickers' locations.
 
 ## Checking license plate
 If the program finds a sticker with a number, it is compared with the car's license plate.

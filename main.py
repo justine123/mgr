@@ -6,7 +6,7 @@ Topic: Detecting stickers (vignettes, stickers from LEZ zones ets.) on cars' win
 from os import listdir
 from os.path import isfile, join
 # from matplotlib import pyplot as plt
-# import numpy as np
+import numpy as np
 import cv2
 
 
@@ -82,34 +82,38 @@ def find_windshield(car):
 
 
 # TODO 4: przeskalowanie szyby tak aby była prostokątem a nie pod kątem
-def calibrate_picture(frame, car):
-    return frame
+def calibrate_picture(car):
+    return car
 
 
 def find_stickers(windshield):
     """
     Finds all the stickers in an image, by finding defined templates on it.
-    :param windshield: windhield image
+    :param windshield: windshield image
     :return: detected_stickers - list of dictionaries, each dict contains sticker parameters: image, type of sticker
     (LEZ, vignette, sticker type) and its location (for further validation)
     """
     # https://docs.opencv.org/trunk/d4/dc6/tutorial_py_template_matching.html
     detected_stickers = []
-    # locations = []
+    templates = []
+    sticker_types = []
+
     img = windshield
     img2 = img.copy()
     height, width = img.shape
-    templates = []
-    sticker_types = []
+
     path_to_templates = 'stickers/'
     files = [f for f in listdir(path_to_templates) if isfile(join(path_to_templates, f))]
+
     for n in range(0, len(files)):
-        templates[n] = cv2.imread(join(path_to_templates, files[n]))
-        if files[n].find('lez'):
+        templates.append(cv2.imread(join(path_to_templates, files[n])))
+
+        # Set sticker type
+        if files[n].find('lez') != -1:
             sticker_types.append('lez')
-        elif files[n].find('vignette'):
+        elif files[n].find('vignette') != -1:
             sticker_types.append('vignette')
-        elif files[n].find('registration'):
+        elif files[n].find('registration') != -1:
             sticker_types.append('registration')
         else:
             print("Invalid picture type: ", files[n])
@@ -122,11 +126,12 @@ def find_stickers(windshield):
     for n in range(0, len(templates)):
         template = templates[n]
         img = img2.copy()
-        method = 'cv.TM_CCOEFF'
 
         # Apply template Matching
-        w, h = template.shape[::-1]
-        res = cv2.matchTemplate(img, template, method)
+        w, h, c = template.shape[::-1]
+        print("w = ", w, ", h = ", h, ", c = ", c)
+        img.astype(np.float32)
+        res = cv2.matchTemplate(img, template, method=cv2.TM_CCOEFF)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
         # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
@@ -135,8 +140,9 @@ def find_stickers(windshield):
         # else:
         top_left = max_loc
         bottom_right = (top_left[0] + w, top_left[1] + h)
-        # h, w, c = template.shape
+        h, w, c = template.shape
 
+        # Set sticker location on a windshield
         if (top_left[1] + h)/height < 0.5:
             if (top_left[0] + w)/width < 0.5:
                 location = 'top left'
@@ -152,6 +158,9 @@ def find_stickers(windshield):
             cv2.rectangle(img, top_left, bottom_right, 255, 2)
             detected_stickers.append({'img': img[top_left[0]:top_left[0] + w, top_left[1]:top_left[1] + h],
                                       'type': sticker_types[n], 'location': location})
+            print("Detected sticker with type ", sticker_types[n], " and location ", location)
+        else:
+            print("NOT detected sticker with type ", sticker_types[n], " and location ", location)
     return detected_stickers
 
 
