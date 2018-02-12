@@ -5,7 +5,7 @@ Topic: Detecting stickers (vignettes, stickers from LEZ zones ets.) on cars' win
 
 from os import listdir
 from os.path import isfile, join
-# from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 import numpy as np
 import cv2
 
@@ -23,9 +23,9 @@ def main():
 
         cars = find_cars(frame)
         for car in cars:
-            windshield = find_windshield(car)
+            # windshield = find_windshield(car)
             # license_plate = find_license_plate(car)
-            stickers = find_stickers(windshield)
+            stickers = [] #find_stickers(windshield)
             is_valid_sticker = validate_sticker(stickers)
             if is_valid_sticker:
                 print("All the stickers in this car are valid!")
@@ -55,10 +55,11 @@ def find_cars(frame):
     # TODO 2a: processing wielu aut na raz -> w wątkach czy jedno po drugim?
     # TODO 2b: co zrobić, żeby nie powtarzać processingu tego samego auta?
     # based on https://www.geeksforgeeks.org/opencv-python-program-vehicle-detection-video-frame/
+    # and https://pythonspot.com/car-tracking-with-cascades/
     cars_array = []
 
     # Trained XML classifiers describes some features of some object we want to detect
-    car_cascade = cv2.CascadeClassifier('cars.xml')
+    car_cascade = cv2.CascadeClassifier('cars.xml')   # https://github.com/shaanhk/New-GithubTest/blob/master/cars.xml
     # convert to gray scale of each frames
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -125,42 +126,102 @@ def find_stickers(windshield):
     # Match picture with all the possible stickers
     for n in range(0, len(templates)):
         template = templates[n]
-        img = img2.copy()
 
-        # Apply template Matching
-        w, h, c = template.shape[::-1]
-        print("w = ", w, ", h = ", h, ", c = ", c)
-        img.astype(np.float32)
-        res = cv2.matchTemplate(img, template, method=cv2.TM_CCOEFF)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-        # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
-        # if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
-        #     top_left = min_loc
+        MIN_MATCH_COUNT = 10
+
+        img1 = template  # queryImage
+        # img2 = cv2.imread('box_in_scene.png', 0)  # trainImage
+
+        # Initiate SIFT detector
+        # sift = cv2.SIFT()
+        sift = cv2.xfeatures2d.SIFT_create()
+
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(img1, None)
+        kp2, des2 = sift.detectAndCompute(img2, None)
+
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)
+
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+        matches = flann.knnMatch(des1, des2, k=2)
+
+        # store all the good matches as per Lowe's ratio test.
+        good = []
+        for m, k in matches:
+            if m.distance < 0.7 * k.distance:
+                good.append(m)
+
+        if len(good) > MIN_MATCH_COUNT:
+            src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+            dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            matchesMask = mask.ravel().tolist()
+
+            h, w = img1.shape
+            pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+            dst = cv2.perspectiveTransform(pts, M)
+
+            img2 = cv2.polylines(img2, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+
+            draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
+                               singlePointColor=None,
+                               matchesMask=matchesMask,  # draw only inliers
+                               flags=2)
+
+            img3 = cv2.drawMatches(img1, kp1, img2, kp2, good, None, **draw_params)
+
+            plt.imshow(img3, 'gray'), plt.show()
+
+        else:
+            print("Not enough matches are found with file %d %d/%d" % (n, len(good), MIN_MATCH_COUNT))
+
+
+
+
+
+
+
+        # img = img2.copy()
+        #
+        # # Apply template Matching
+        # w, h, c = template.shape[::-1]
+        # print("w = ", w, ", h = ", h, ", c = ", c)
+        # img.astype(np.float32)
+        # res = cv2.matchTemplate(img, template, method=cv2.TM_CCOEFF)
+        # min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        #
+        # # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
+        # # if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+        # #     top_left = min_loc
+        # # else:
+        # top_left = max_loc
+        # bottom_right = (top_left[0] + w, top_left[1] + h)
+        # h, w, c = template.shape
+        #
+        # # Set sticker location on a windshield
+        # if (top_left[1] + h)/height < 0.5:
+        #     if (top_left[0] + w)/width < 0.5:
+        #         location = 'top left'
+        #     else:
+        #         location = 'top right'
         # else:
-        top_left = max_loc
-        bottom_right = (top_left[0] + w, top_left[1] + h)
-        h, w, c = template.shape
-
-        # Set sticker location on a windshield
-        if (top_left[1] + h)/height < 0.5:
-            if (top_left[0] + w)/width < 0.5:
-                location = 'top left'
-            else:
-                location = 'top right'
-        else:
-            if (top_left[0] + w)/width < 0.5:
-                location = 'bottom left'
-            else:
-                location = 'bottom right'
-
-        if min_val < h * w * 3 * (20 * 20):
-            cv2.rectangle(img, top_left, bottom_right, 255, 2)
-            detected_stickers.append({'img': img[top_left[0]:top_left[0] + w, top_left[1]:top_left[1] + h],
-                                      'type': sticker_types[n], 'location': location})
-            print("Detected sticker with type ", sticker_types[n], " and location ", location)
-        else:
-            print("NOT detected sticker with type ", sticker_types[n], " and location ", location)
+        #     if (top_left[0] + w)/width < 0.5:
+        #         location = 'bottom left'
+        #     else:
+        #         location = 'bottom right'
+        #
+        # if min_val < h * w * 3 * (20 * 20):
+        #     cv2.rectangle(img, top_left, bottom_right, 255, 2)
+        #     detected_stickers.append({'img': img[top_left[0]:top_left[0] + w, top_left[1]:top_left[1] + h],
+        #                               'type': sticker_types[n], 'location': location})
+        #     print("Detected sticker with type ", sticker_types[n], " and location ", location)
+        # else:
+        #     print("NOT detected sticker with type ", sticker_types[n], " and location ", location)
     return detected_stickers
 
 
@@ -173,7 +234,7 @@ def validate_sticker(detected_stickers):
     # TODO 6d: coś oszukańczego na szybie co udaje naklejke
     # TODO 6e: naklejka przestarzała
     passed = 0
-    has_registration_sticker = False
+    # has_registration_sticker = False
 
     # Check if every sticker is in correct location
     for sticker in detected_stickers:
@@ -185,22 +246,19 @@ def validate_sticker(detected_stickers):
                       sticker.location)
 
         if sticker.type == 'registration':
-            has_registration_sticker = True
+            # has_registration_sticker = True
             if sticker.location == "bottom left":
                 passed += 1
             else:
                 print("Wrong registration sticker location - should be in top left corner, but is in " +
                       sticker.location)
 
-    # Registration sticker is mandatory in this scenario-
-    if not has_registration_sticker:
-        return False
+    # Registration sticker is mandatory in this scenario
+    # if not has_registration_sticker:
+    #     return False
 
     # Each sticker must be valid
-    if passed == len(detected_stickers):
-        return True
-    else:
-        return False
+    return passed == len(detected_stickers)
 
 
 # def find_license_plate(car):
